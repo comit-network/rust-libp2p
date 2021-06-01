@@ -11,7 +11,7 @@ use std::task::{Context, Poll};
 
 pub struct Rendezvous {
     events: VecDeque<NetworkBehaviourAction<Input, Event>>,
-    registrations: HashMap<String, HashSet<PeerId>>,
+    registrations: HashMap<String, HashSet<Registration>>,
 }
 
 impl Rendezvous {
@@ -127,7 +127,7 @@ impl NetworkBehaviour for Rendezvous {
                 self.registrations
                     .entry(new_reggo.namespace)
                     .or_insert_with(|| HashSet::new())
-                    .insert(new_reggo.record.peer_id());
+                    .insert(new_reggo.clone());
 
                 self.events
                     .push_back(NetworkBehaviourAction::NotifyHandler {
@@ -161,9 +161,9 @@ impl NetworkBehaviour for Rendezvous {
                 ))
             }
             Message::Unregister { namespace } => {
-                if let Some(peers) = self.registrations.get_mut(&namespace) {
-                    if peers.contains(&peer_id) {
-                        peers.remove(&peer_id);
+                if let Some(registrations) = self.registrations.get_mut(&namespace) {
+                    if registrations.contains(&peer_id) {
+                        registrations.remove(&peer_id);
                     }
                 }
                 // todo: maybe send a unregister response to the remote?
@@ -176,10 +176,7 @@ impl NetworkBehaviour for Rendezvous {
                                 peer_id,
                                 handler: NotifyHandler::Any,
                                 event: Input::DiscoverResponse {
-                                    discovered: peers
-                                        .iter()
-                                        .map(|peer| (ns.clone(), peer.clone()))
-                                        .collect(),
+                                    registrations: peers.iter().map(|r| r.clone()).collect(),
                                 },
                             });
                     }
@@ -187,28 +184,32 @@ impl NetworkBehaviour for Rendezvous {
                     let discovered = self
                         .registrations
                         .iter()
-                        .map(|(ns, peers)| {
-                            peers
+                        .map(|(ns, registrations)| {
+                            registrations
                                 .iter()
-                                .map(|peer_id| (ns.clone(), peer_id.clone()))
-                                .collect::<Vec<(String, PeerId)>>()
+                                .map(|registration| registration.clone())
+                                .collect::<Vec<Registration>>()
                                 .into_iter()
                         })
                         .flatten()
-                        .collect::<Vec<(String, PeerId)>>();
+                        .collect::<Vec<Registration>>();
 
                     self.events
                         .push_back(NetworkBehaviourAction::NotifyHandler {
                             peer_id,
                             handler: NotifyHandler::Any,
-                            event: Input::DiscoverResponse { discovered },
+                            event: Input::DiscoverResponse {
+                                registrations: discovered,
+                            },
                         });
                 }
                 self.events
                     .push_back(NetworkBehaviourAction::NotifyHandler {
                         peer_id,
                         handler: NotifyHandler::Any,
-                        event: Input::DiscoverResponse { discovered: vec![] },
+                        event: Input::DiscoverResponse {
+                            registrations: vec![],
+                        },
                     })
             }
             Message::DiscoverResponse { registrations } => {

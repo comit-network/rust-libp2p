@@ -1,5 +1,5 @@
-use crate::codec::{Message, Registration};
-use crate::codec::{NewRegistration, RendezvousCodec};
+use crate::codec::Message;
+use crate::codec::{Registration, RendezvousCodec};
 use crate::protocol;
 use crate::protocol::Rendezvous;
 use asynchronous_codec::Framed;
@@ -52,7 +52,7 @@ pub enum Input {
         message: Message,
     },
     DiscoverResponse {
-        discovered: Vec<(String, PeerId)>,
+        registrations: Vec<Registration>,
     },
 }
 
@@ -142,7 +142,7 @@ impl ProtocolsHandler for RendezvousHandler {
                 OutboundState::None,
             ) => (
                 inbound,
-                OutboundState::Start(Message::Register(NewRegistration::new(
+                OutboundState::Start(Message::Register(Registration::new(
                     namespace.clone(),
                     record,
                     ttl,
@@ -166,19 +166,11 @@ impl ProtocolsHandler for RendezvousHandler {
                 outbound,
             ) => (InboundState::PendingSend(substream, message), outbound),
             (
-                Input::DiscoverResponse { discovered },
+                Input::DiscoverResponse { registrations },
                 InboundState::WaitForBehaviour(substream),
                 outbound,
             ) => {
-                let msg = Message::DiscoverResponse {
-                    registrations: discovered
-                        .iter()
-                        .map(|d| Registration {
-                            namespace: d.0.to_string(),
-                            record: record.clone(),
-                        })
-                        .collect(),
-                };
+                let msg = Message::DiscoverResponse { registrations };
                 (InboundState::PendingSend(substream, msg), outbound)
             }
             _ => unreachable!("Handler in invalid state"),

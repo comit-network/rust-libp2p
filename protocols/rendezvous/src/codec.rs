@@ -5,7 +5,7 @@ use unsigned_varint::codec::UviBytes;
 
 #[derive(Debug)]
 pub enum Message {
-    Register(NewRegistration),
+    Register(Registration),
     SuccessfullyRegistered {
         ttl: i64,
     },
@@ -30,8 +30,8 @@ pub enum Message {
     },
 }
 
-#[derive(Debug)]
-pub struct NewRegistration {
+#[derive(Debug, Clone)]
+pub struct Registration {
     pub namespace: String,
     pub record: AuthenticatedPeerRecord,
     ttl: Option<i64>,
@@ -42,7 +42,7 @@ pub struct NewRegistration {
 /// See https://github.com/libp2p/specs/blob/d21418638d5f09f2a4e5a1ceca17058df134a300/rendezvous/README.md#L116-L117.
 const DEFAULT_TTL: i64 = 60 * 60 * 2;
 
-impl NewRegistration {
+impl Registration {
     pub fn new(namespace: String, record: AuthenticatedPeerRecord, ttl: Option<i64>) -> Self {
         Self {
             namespace,
@@ -54,13 +54,6 @@ impl NewRegistration {
     pub fn effective_ttl(&self) -> i64 {
         self.ttl.unwrap_or(DEFAULT_TTL)
     }
-}
-
-#[derive(Debug)]
-pub struct Registration {
-    pub namespace: String,
-    pub record: AuthenticatedPeerRecord,
-    // pub ttl: i64, // TODO: This is useless as a relative value, need registration timestamp, this needs to be a unix timestamp or this is relative in remaining seconds
 }
 
 #[derive(Debug)]
@@ -145,7 +138,7 @@ impl From<Message> for wire::Message {
         use wire::message::*;
 
         match message {
-            Message::Register(NewRegistration {
+            Message::Register(Registration {
                 namespace,
                 record,
                 ttl,
@@ -263,7 +256,7 @@ impl TryFrom<wire::Message> for Message {
                         signed_peer_record: Some(signed_peer_record),
                     }),
                 ..
-            } => Message::Register(NewRegistration {
+            } => Message::Register(Registration {
                 namespace: ns.ok_or(ConversionError::MissingNamespace)?,
                 ttl,
                 record: AuthenticatedPeerRecord::from_signed_envelope(
@@ -309,6 +302,7 @@ impl TryFrom<wire::Message> for Message {
                                         .ok_or(ConversionError::MissingSignedPeerRecord)?,
                                 )?,
                             )?,
+                            ttl: None,
                         })
                     })
                     .collect::<Result<Vec<_>, ConversionError>>()?,
@@ -360,6 +354,7 @@ impl TryFrom<wire::Message> for Message {
                                         .ok_or(ConversionError::MissingSignedPeerRecord)?,
                                 )?,
                             )?,
+                            ttl: None,
                         })
                     })
                     .collect::<Result<Vec<_>, ConversionError>>()?,
