@@ -20,11 +20,23 @@
 
 pub use self::behaviour::{Config, Event, RegisterError, Rendezvous};
 pub use self::codec::{ErrorCode, Namespace, NamespaceTooLong, Registration, Ttl};
+use libp2p_core::UpgradeInfo;
+use std::iter;
 
 mod behaviour;
 mod codec;
 mod handler;
 mod substream_handler;
+
+impl UpgradeInfo for Rendezvous {
+    type Info = &'static [u8];
+    type InfoIter = iter::Once<Self::Info>;
+
+    fn protocol_info(&self) -> Self::InfoIter {
+        iter::once(b"/rendezvous/1.0.0")
+    }
+}
+
 
 /// If unspecified, rendezvous nodes should assume a TTL of 2h.
 ///
